@@ -72,6 +72,11 @@ CONFIG_SCHEMA = cv.Schema({
         state_class="measurement",
     ),
     cv.Optional(CONF_PROBE_STATUS_SENSOR): text_sensor.text_sensor_schema(),
+
+    # Optional custom calibration buffer values
+    cv.Optional("ph4_solution", default=4.0): cv.float_,
+    cv.Optional("ph7_solution", default=7.0): cv.float_,
+    cv.Optional("ph10_solution", default=10.0): cv.float_,
 })
 
 async def to_code(config):

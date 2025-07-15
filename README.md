@@ -19,7 +19,7 @@ This component enables accurate pH monitoring and calibration for aquarium, hydr
 - 🎛️ **Switch to toggle calibration mode**
 - 🔄 **Calibration actions: pH4, pH7, pH10, Reset**
 - 📉 **Smoothed readings using exponential filter**
-
+- 🛠️ **Customizable calibration buffer values** (e.g., pH 3.0, 6.86, etc.)
 
 ## 🧰 Hardware Compatibility
 
@@ -102,7 +102,13 @@ dfrobot_ph_meter:
   # Optional sensors for diagnostics
   raw_voltage_sensor:
     name: "pH Raw Voltage"
+  # Optional: Custom calibration buffer values
+  ph4_solution: 3.02   # Default: 4.0
+  ph7_solution: 6.86   # Default: 7.0
+  ph10_solution: 9.18  # Default: 10.0
+```
 
+```yaml
 sensor:
   - platform: ads1115
     id: ph_voltage_sensor

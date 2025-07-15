@@ -120,6 +120,10 @@ class DFRobotPHMeter : public Component {
 
   InputMode input_mode_{MODE_ADS1115};
   int adc_gpio_{-1};
+
+  float ph4_solution_ = 4.0f;
+  float ph7_solution_ = 7.0f;
+  float ph10_solution_ = 10.0f;
 };
 
 class CalibratePHAction : public esphome::Action<> {

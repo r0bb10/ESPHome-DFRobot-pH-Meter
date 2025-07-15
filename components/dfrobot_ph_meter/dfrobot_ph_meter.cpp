@@ -34,6 +34,11 @@ void DFRobotPHMeter::setup() {
     analogReadResolution(12);
     analogSetAttenuation(ADC_11db);
   }
+
+  // Load custom calibration solutions from YAML
+  ph4_solution_ = 4.0f;
+  ph7_solution_ = 7.0f;
+  ph10_solution_ = 10.0f;
 }
 
 void DFRobotPHMeter::reset_calibration() {
@@ -102,8 +107,8 @@ float DFRobotPHMeter::clamp_ph_(float ph) const {
 float DFRobotPHMeter::calculate_ph_(float voltage, float temp_c, float &out_slope) {
   if (use_three_point_) {
     out_slope = (voltage < neutral_voltage_)
-                  ? (neutral_voltage_ - acid_voltage_) / (7.0f - 4.0f)
-                  : (alkaline_voltage_ - neutral_voltage_) / (10.0f - 7.0f);
+                  ? (neutral_voltage_ - acid_voltage_) / (ph7_solution_ - ph4_solution_)
+                  : (alkaline_voltage_ - neutral_voltage_) / (ph10_solution_ - ph7_solution_);
   } else {
     float v1, v2;
     float p1 = cal_point_1_;
