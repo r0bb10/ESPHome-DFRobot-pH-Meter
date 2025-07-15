@@ -10,6 +10,7 @@ static constexpr float NERNST_REFERENCE_TEMP = 25.0f;
 static constexpr float KELVIN_OFFSET = 273.15f;
 
 void DFRobotPHMeter::setup() {
+  // Initialize preferences and load stored calibration voltages
   acid_voltage_pref_ = global_preferences->make_preference<float>(fnv1_hash("ph4_voltage"));
   neutral_voltage_pref_ = global_preferences->make_preference<float>(fnv1_hash("ph7_voltage"));
   alkaline_voltage_pref_ = global_preferences->make_preference<float>(fnv1_hash("ph10_voltage"));
@@ -42,6 +43,7 @@ void DFRobotPHMeter::setup() {
 }
 
 void DFRobotPHMeter::reset_calibration() {
+  // Reset calibration voltages to defaults and save them
   save_calibration_voltage_(acid_voltage_pref_, acid_voltage_, acid_voltage_default_, "pH4");
   save_calibration_voltage_(neutral_voltage_pref_, neutral_voltage_, neutral_voltage_default_, "pH7");
   save_calibration_voltage_(alkaline_voltage_pref_, alkaline_voltage_, alkaline_voltage_default_, "pH10");
@@ -55,6 +57,7 @@ void DFRobotPHMeter::reset_calibration() {
 }
 
 bool DFRobotPHMeter::save_calibration_voltage_(ESPPreferenceObject &pref, float &internal_value, float new_value, const char *label) {
+  // Save calibration voltage if it has changed significantly
   if (fabs(internal_value - new_value) > 0.1f) {
     internal_value = new_value;
     pref.save(&internal_value);
@@ -65,12 +68,14 @@ bool DFRobotPHMeter::save_calibration_voltage_(ESPPreferenceObject &pref, float 
 }
 
 void DFRobotPHMeter::set_calibration_stage(int stage) {
+  // Set the current calibration stage based on the provided pH value
   if (stage == 4) calibration_stage_ = PH4;
   else if (stage == 7) calibration_stage_ = PH7;
   else if (stage == 10) calibration_stage_ = PH10;
 }
 
 void DFRobotPHMeter::update_probe_status_() {
+  // Update the status of the probe based on its current state
   if (!probe_status_sensor_) return;
 
   if (!voltage_initialized_) {
@@ -92,6 +97,7 @@ void DFRobotPHMeter::update_probe_status_() {
 }
 
 float DFRobotPHMeter::get_temperature_() const {
+  // Retrieve the current temperature from the sensor or use the default value
   float t = temperature_;
   if (temperature_sensor_ && temperature_sensor_->has_state())
     t = temperature_sensor_->state;
@@ -99,12 +105,14 @@ float DFRobotPHMeter::get_temperature_() const {
 }
 
 float DFRobotPHMeter::clamp_ph_(float ph) const {
+  // Ensure the pH value is within the valid range (0-14)
   if (ph < 0.0f) return 0.0f;
   if (ph > 14.0f) return 14.0f;
   return ph;
 }
 
 float DFRobotPHMeter::calculate_ph_(float voltage, float temp_c, float &out_slope) {
+  // Calculate the pH value based on voltage, temperature, and calibration points
   if (use_three_point_) {
     out_slope = (voltage < neutral_voltage_)
                   ? (neutral_voltage_ - acid_voltage_) / (ph7_solution_ - ph4_solution_)
@@ -137,6 +145,7 @@ void DFRobotPHMeter::log_readings_(float voltage, float temp, float slope, float
 }
 
 void DFRobotPHMeter::evaluate_calibration_mode_() {
+  // Determine the calibration mode based on stored voltages
   float ph4_v = 0.0f, ph7_v = 0.0f, ph10_v = 0.0f;
 
   // Load stored voltages
@@ -170,6 +179,7 @@ void DFRobotPHMeter::evaluate_calibration_mode_() {
 }
 
 void DFRobotPHMeter::check_reset_status_() {
+  // Check if the reset status timer has expired and update the status
   const uint32_t now = millis();
   if (status_reset_timer_ > 0 && now - status_reset_timer_ > 10000) {
     status_reset_timer_ = 0;
@@ -234,6 +244,7 @@ void DFRobotPHMeter::loop() {
   float slope = 0.0f;
   float ph = clamp_ph_(calculate_ph_(voltage, temp_c, slope));
 
+  // Apply smoothing to the calculated pH value
   if (std::isnan(smoothed_ph_))
     smoothed_ph_ = ph;
   else
@@ -241,6 +252,7 @@ void DFRobotPHMeter::loop() {
 
   log_readings_(voltage, temp_c, slope, smoothed_ph_);
 
+  // Convert temperature to Fahrenheit if required
   ESP_LOGI(TAG, "Voltage: %.2f mV, Temp: %.2f %s, pH: %.2f", voltage,
            use_fahrenheit_ ? (temp_c * 9.0f / 5.0f + 32.0f) : temp_c,
            use_fahrenheit_ ? "°F" : "°C", smoothed_ph_);
@@ -256,6 +268,7 @@ void DFRobotPHMeter::loop() {
 }
 
 void CalibratePHAction::play() {
+  // Perform the calibration action based on the current stage
   if (!this->parent_) return;
   if (stage_ == 0) this->parent_->reset_calibration();
   else this->parent_->set_calibration_stage(stage_);
