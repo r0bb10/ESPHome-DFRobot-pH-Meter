@@ -10,7 +10,6 @@ from esphome.const import (
 )
 
 AUTO_LOAD = ["sensor", "switch", "text_sensor"]
-DEPENDENCIES = ["ads1115"]
 MULTI_CONF = True
 
 ph_meter_ns = cg.esphome_ns.namespace("dfrobot_ph_meter")
