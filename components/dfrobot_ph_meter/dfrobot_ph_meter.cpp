@@ -5,6 +5,11 @@
 #if defined(ESP_PLATFORM)
 #include "esp_adc/adc_oneshot.h"
 #include "esp_timer.h"
+
+static adc_oneshot_unit_handle_t adc_handle = nullptr;
+static adc_oneshot_chan_cfg_t chan_cfg;
+static bool adc_initialized = false;
+
 #endif
 
 namespace esphome {
@@ -44,9 +49,6 @@ void DFRobotPHMeter::setup() {
     analogSetAttenuation(ADC_11db);
     #elif defined(ESP_PLATFORM)
     // ESP-IDF: configure ADC oneshot unit and channel
-    static adc_oneshot_unit_handle_t adc_handle = nullptr;
-    static adc_oneshot_chan_cfg_t chan_cfg;
-    static bool adc_initialized = false;
     if (!adc_initialized) {
       adc_oneshot_unit_init_cfg_t init_cfg = {
         .unit_id = ADC_UNIT_1,
@@ -57,7 +59,7 @@ void DFRobotPHMeter::setup() {
       adc_oneshot_config_channel(adc_handle, static_cast<adc_channel_t>(adc_gpio_ - 32), &chan_cfg);
       adc_initialized = true;
     }
-#endif
+    #endif
   }
 
   // Load custom calibration solutions from YAML
