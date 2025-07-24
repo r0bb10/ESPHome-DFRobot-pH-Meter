@@ -38,11 +38,11 @@ void DFRobotPHMeter::setup() {
 
   // ADC configuration for native ADC mode
   if (input_mode_ == MODE_NATIVE_ADC && adc_gpio_ >= 0) {
-#if defined(ARDUINO)
+    #if defined(ARDUINO)
     // Arduino framework: set ADC resolution and attenuation
     analogReadResolution(12);
     analogSetAttenuation(ADC_11db);
-#elif defined(ESP_PLATFORM)
+    #elif defined(ESP_PLATFORM)
     // ESP-IDF: configure ADC oneshot unit and channel
     static adc_oneshot_unit_handle_t adc_handle = nullptr;
     static adc_oneshot_chan_cfg_t chan_cfg;
@@ -222,11 +222,11 @@ void DFRobotPHMeter::check_reset_status_() {
 
 void DFRobotPHMeter::loop() {
   uint32_t now;
-#if defined(ARDUINO)
+  #if defined(ARDUINO)
   now = millis();
-#elif defined(ESP_PLATFORM)
+  #elif defined(ESP_PLATFORM)
   now = static_cast<uint32_t>(esp_timer_get_time() / 1000); // microseconds to ms
-#endif
+  #endif
   if (now - last_update_ < update_interval_) return;
   last_update_ = now;
 
@@ -239,10 +239,10 @@ void DFRobotPHMeter::loop() {
     voltage = ads1115_->state * 1000.0f;
   } else if (input_mode_ == MODE_NATIVE_ADC) {
     if (adc_gpio_ < 0) return;
-#if defined(ARDUINO)
+    #if defined(ARDUINO)
     int raw = analogRead(adc_gpio_);
     voltage = (raw / 4095.0f) * 3300.0f;
-#elif defined(ESP_PLATFORM)
+    #elif defined(ESP_PLATFORM)
     // ESP-IDF: use ADC oneshot API for GPIOs 32-39
     static adc_oneshot_unit_handle_t adc_handle = nullptr;
     int raw = 0;
