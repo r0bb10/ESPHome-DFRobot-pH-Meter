@@ -37,21 +37,21 @@ This component enables accurate pH monitoring and calibration for aquarium, hydr
 ```
   DFRobot pH Sensor        ADS1115         ESP32
   -----------------      ---------       ---------
-  Signal (Yellow)  ───▶  A0              (via I²C SDA/SCL)
+  Signal (Yellow)  ───▶  A0             (= I²C ch.0)
   GND (Black)      ───── GND             GND
   VCC (Red)        ───── VDD             3.3V
-                      SDA ────────────── GPIO21
-                      SCL ────────────── GPIO22
+                         SDA ─────────── GPIO21
+                         SCL ─────────── GPIO22
 ```
 
 ### Option 2: **Using ESP32 ADC GPIO**
 
 ```
-  DFRobot pH Sensor        ESP32
-  -----------------      ---------
-  Signal (Yellow)  ───▶  GPIO36 (ADC)
-  GND (Black)      ───── GND
-  VCC (Red)        ───── 3.3V
+  DFRobot pH Sensor         ESP32
+  -----------------       ---------
+  Signal (Yellow)  ───▶   GPIO36 (ADC)
+  GND (Black)      ─────── GND
+  VCC (Red)        ─────── 3.3V
 ```
 
 > ⚠️ When using native ESP32 ADC, expect **less accuracy** and more noise due to its nonlinear nature.
@@ -72,31 +72,19 @@ external_components:
 
 ## ⚙️ Configuration
 
+### Example 1: Using ESP32 ADC (No ADS1115) and no Temp compensation (defaults to 25°C)
 ```yaml
 # pH Meter Component Configuration
 dfrobot_ph_meter:
   id: ph_sensor
-  # Input mode (choose one):
-  use_ads1115: false   # Set to true to use ADS1115 (default is false — uses ESP32 ADC pin).
-  adc_pin: 36          # Specifies ESP32 analog GPIO, ignored if use_ads1115 is true.
-  id_ads1115: ads_a0   # Required only when use_ads1115 is true, ignored if use_ads1115 is false.
-  channel: 0           # ADS1115 channel (0–3), ignored if use_ads1115 is false.
-  # Optional: Output current temperature as a sensor
-  temperature_output:
-    name: "Water Temperature (used by pH)"
-    accuracy_decimals: 1
-  # Optional: Set temperature unit for display & output
-  temperature_unit: celsius
-  # Optional: Time between readings (default: 10s)
-  update_interval: 10s
-  # Output pH value
+  use_ads1115: false 
+  adc_pin: 36
+  update_interval: 10s  # Optional: Time between readings (default: 10s)
   ph_sensor:
     name: "pH Sensor"
     accuracy_decimals: 2
-  # Toggle switch to enable calibration mode
   calibration_mode:
     name: "pH Calibration Mode"
-  # Text sensor showing current operation status
   probe_status_sensor:
     name: "Probe Status"
   # Optional sensors for diagnostics
@@ -106,9 +94,66 @@ dfrobot_ph_meter:
   ph4_solution: 3.02   # Default: 4.0
   ph7_solution: 6.86   # Default: 7.0
   ph10_solution: 9.18  # Default: 10.0
+
+button:
+  - platform: template
+    name: "Calibrate pH 4"
+    on_press:
+      then:
+        - dfrobot_ph_meter.calibrate_ph4:
+            id: ph_sensor
+  - platform: template
+    name: "Calibrate pH 7"
+    on_press:
+      then:
+        - dfrobot_ph_meter.calibrate_ph7:
+            id: ph_sensor
+  - platform: template
+    name: "Calibrate pH 10"
+    on_press:
+      then:
+        - dfrobot_ph_meter.calibrate_ph10:
+            id: ph_sensor
+  - platform: template
+    name: "Reset pH Calibration"
+    on_press:
+      then:
+        - dfrobot_ph_meter.reset_calibration:
+            id: ph_sensor
 ```
 
+### Example 2: Using ADS1115 with the ESP32 and Temp compensation
 ```yaml
+# pH Meter Component Configuration
+dfrobot_ph_meter:
+  id: ph_sensor
+  use_ads1115: true
+  channel: 0
+  id_ads1115: ph_voltage_sensor
+  update_interval: 10s 
+  temperature_sensor: water_temp  # If specified is used for compensation
+  ph_sensor:
+    name: "pH Sensor"
+    accuracy_decimals: 2
+  calibration_mode:
+    name: "pH Calibration Mode"
+  probe_status_sensor:
+    name: "Probe Status"
+  # Optional sensors for diagnostics
+  raw_voltage_sensor:
+    name: "pH Raw Voltage"
+  # Optional: Custom calibration buffer values
+  ph4_solution: 3.02   # Default: 4.0
+  ph7_solution: 6.86   # Default: 7.0
+  ph10_solution: 9.18  # Default: 10.0
+
+one_wire:
+  - platform: gpio
+    pin: GPIO22
+
+ads1115:
+  - address: 0x48
+
 sensor:
   - platform: ads1115
     id: ph_voltage_sensor
@@ -125,27 +170,26 @@ button:
     on_press:
       then:
         - dfrobot_ph_meter.calibrate_ph4:
-            id: ph1
+            id: ph_sensor
   - platform: template
     name: "Calibrate pH 7"
     on_press:
       then:
         - dfrobot_ph_meter.calibrate_ph7:
-            id: ph1
+            id: ph_sensor
   - platform: template
     name: "Calibrate pH 10"
     on_press:
       then:
         - dfrobot_ph_meter.calibrate_ph10:
-            id: ph1
+            id: ph_sensor
   - platform: template
     name: "Reset pH Calibration"
     on_press:
       then:
         - dfrobot_ph_meter.reset_calibration:
-            id: ph1
+            id: ph_sensor
 ```
-
 
 ## 🧪 Notes
 
