@@ -2,6 +2,11 @@
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
 
+#if defined(ESP_PLATFORM)
+#include "esp_adc/adc_oneshot.h"
+#include "esp_timer.h"
+#endif
+
 namespace esphome {
 namespace dfrobot_ph_meter {
 
@@ -31,9 +36,28 @@ void DFRobotPHMeter::setup() {
   else
     alkaline_voltage_ = alkaline_voltage_default_;
 
+  // ADC configuration for native ADC mode
   if (input_mode_ == MODE_NATIVE_ADC && adc_gpio_ >= 0) {
+#if defined(ARDUINO)
+    // Arduino framework: set ADC resolution and attenuation
     analogReadResolution(12);
     analogSetAttenuation(ADC_11db);
+#elif defined(ESP_PLATFORM)
+    // ESP-IDF: configure ADC oneshot unit and channel
+    static adc_oneshot_unit_handle_t adc_handle = nullptr;
+    static adc_oneshot_chan_cfg_t chan_cfg;
+    static bool adc_initialized = false;
+    if (!adc_initialized) {
+      adc_oneshot_unit_init_cfg_t init_cfg = {
+        .unit_id = ADC_UNIT_1,
+      };
+      adc_oneshot_new_unit(&init_cfg, &adc_handle);
+      chan_cfg.bitwidth = ADC_BITWIDTH_12;
+      chan_cfg.atten = ADC_ATTEN_DB_12;
+      adc_oneshot_config_channel(adc_handle, static_cast<adc_channel_t>(adc_gpio_ - 32), &chan_cfg);
+      adc_initialized = true;
+    }
+#endif
   }
 
   // Load custom calibration solutions from YAML
@@ -53,7 +77,11 @@ void DFRobotPHMeter::reset_calibration() {
 
   if (probe_status_sensor_) probe_status_sensor_->publish_state("RESET_DONE");
   calibration_stage_ = NONE;
+#if defined(ARDUINO)
   status_reset_timer_ = millis();
+#elif defined(ESP_PLATFORM)
+  status_reset_timer_ = static_cast<uint32_t>(esp_timer_get_time() / 1000); // microseconds to ms
+#endif
 }
 
 bool DFRobotPHMeter::save_calibration_voltage_(ESPPreferenceObject &pref, float &internal_value, float new_value, const char *label) {
@@ -180,7 +208,12 @@ void DFRobotPHMeter::evaluate_calibration_mode_() {
 
 void DFRobotPHMeter::check_reset_status_() {
   // Check if the reset status timer has expired and update the status
-  const uint32_t now = millis();
+  uint32_t now;
+#if defined(ARDUINO)
+  now = millis();
+#elif defined(ESP_PLATFORM)
+  now = static_cast<uint32_t>(esp_timer_get_time() / 1000); // microseconds to ms
+#endif
   if (status_reset_timer_ > 0 && now - status_reset_timer_ > 10000) {
     status_reset_timer_ = 0;
     if (probe_status_sensor_) probe_status_sensor_->publish_state("IDLE");
@@ -188,7 +221,12 @@ void DFRobotPHMeter::check_reset_status_() {
 }
 
 void DFRobotPHMeter::loop() {
-  const uint32_t now = millis();
+  uint32_t now;
+#if defined(ARDUINO)
+  now = millis();
+#elif defined(ESP_PLATFORM)
+  now = static_cast<uint32_t>(esp_timer_get_time() / 1000); // microseconds to ms
+#endif
   if (now - last_update_ < update_interval_) return;
   last_update_ = now;
 
@@ -201,8 +239,20 @@ void DFRobotPHMeter::loop() {
     voltage = ads1115_->state * 1000.0f;
   } else if (input_mode_ == MODE_NATIVE_ADC) {
     if (adc_gpio_ < 0) return;
+#if defined(ARDUINO)
     int raw = analogRead(adc_gpio_);
     voltage = (raw / 4095.0f) * 3300.0f;
+#elif defined(ESP_PLATFORM)
+    // ESP-IDF: use ADC oneshot API for GPIOs 32-39
+    static adc_oneshot_unit_handle_t adc_handle = nullptr;
+    int raw = 0;
+    if (adc_handle && adc_gpio_ >= 32 && adc_gpio_ <= 39) {
+      adc_oneshot_read(adc_handle, static_cast<adc_channel_t>(adc_gpio_ - 32), &raw);
+      voltage = (raw / 4095.0f) * 3300.0f;
+    } else {
+      voltage = 0.0f;
+    }
+#endif
   }
 
   if (voltage < MIN_VALID_VOLTAGE || voltage > MAX_VALID_VOLTAGE) return;
