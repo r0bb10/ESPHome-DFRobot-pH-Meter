@@ -161,7 +161,7 @@ float DFRobotPHMeter::calculate_ph_(float voltage, float temp_c, float &out_slop
       v1 = acid_voltage_;
       v2 = alkaline_voltage_;
     }
-    out_slope = (p2 - p1) / (v2 - v1);
+    out_slope = (v2 - v1) / (p2 - p1);
   }
 
   const float temp_factor = (temp_c + KELVIN_OFFSET) / (NERNST_REFERENCE_TEMP + KELVIN_OFFSET);
