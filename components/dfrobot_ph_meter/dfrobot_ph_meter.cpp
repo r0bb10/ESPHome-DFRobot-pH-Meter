@@ -178,15 +178,10 @@ void DFRobotPHMeter::evaluate_calibration_mode_() {
   // Determine the calibration mode based on stored voltages
   float ph4_v = 0.0f, ph7_v = 0.0f, ph10_v = 0.0f;
 
-  // Load stored voltages
-  acid_voltage_pref_.load(&ph4_v);
-  neutral_voltage_pref_.load(&ph7_v);
-  alkaline_voltage_pref_.load(&ph10_v);
-
-  // Only consider as calibrated if different from default
-  bool has_ph4 = fabs(ph4_v - acid_voltage_default_) > 1.0f;
-  bool has_ph7 = fabs(ph7_v - neutral_voltage_default_) > 1.0f;
-  bool has_ph10 = fabs(ph10_v - alkaline_voltage_default_) > 1.0f;
+  // Check if stored values exist and differ from defaults
+  bool has_ph4 = acid_voltage_pref_.load(&ph4_v) && fabs(ph4_v - acid_voltage_default_) > 1.0f;
+  bool has_ph7 = neutral_voltage_pref_.load(&ph7_v) && fabs(ph7_v - neutral_voltage_default_) > 1.0f;
+  bool has_ph10 = alkaline_voltage_pref_.load(&ph10_v) && fabs(ph10_v - alkaline_voltage_default_) > 1.0f;
 
   int count = int(has_ph4) + int(has_ph7) + int(has_ph10);
 
