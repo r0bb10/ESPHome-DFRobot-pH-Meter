@@ -174,6 +174,21 @@ void DFRobotPHMeter::log_readings_(float voltage, float temp, float slope, float
   ESP_LOGD(TAG, "Voltage: %.2f mV | Temp: %.2f °C | Slope: %.4f | pH: %.2f", voltage, temp, slope, ph);
 }
 
+float DFRobotPHMeter::calculate_median_(float *values, int count) {
+  // Simple bubble sort for median calculation
+  for (int i = 0; i < count - 1; i++) {
+    for (int j = 0; j < count - i - 1; j++) {
+      if (values[j] > values[j + 1]) {
+        float temp = values[j];
+        values[j] = values[j + 1];
+        values[j + 1] = temp;
+      }
+    }
+  }
+  // Return middle value
+  return values[count / 2];
+}
+
 void DFRobotPHMeter::evaluate_calibration_mode_() {
   // Determine the calibration mode based on stored voltages
   float ph4_v = 0.0f, ph7_v = 0.0f, ph10_v = 0.0f;
@@ -229,28 +244,42 @@ void DFRobotPHMeter::loop() {
 
   update_probe_status_();
 
-  float voltage = 0.0f;
+  // Collect multiple samples for median filtering
+  float voltage_samples[10];
+  int samples_to_take = median_samples_ > 10 ? 10 : (median_samples_ < 1 ? 1 : median_samples_);
+  
+  for (int i = 0; i < samples_to_take; i++) {
+    float voltage = 0.0f;
 
-  if (input_mode_ == MODE_ADS1115) {
-    if (!ads1115_ || !ads1115_->has_state()) return;
-    voltage = ads1115_->state * 1000.0f;
-  } else if (input_mode_ == MODE_NATIVE_ADC) {
-    if (adc_gpio_ < 0) return;
-    #if defined(ARDUINO)
-    int raw = analogRead(adc_gpio_);
-    voltage = (raw / 4095.0f) * 3300.0f;
-    #elif defined(ESP_PLATFORM)
-    // ESP-IDF: use ADC oneshot API for GPIOs 32-39
-    static adc_oneshot_unit_handle_t adc_handle = nullptr;
-    int raw = 0;
-    if (adc_handle && adc_gpio_ >= 32 && adc_gpio_ <= 39) {
-      adc_oneshot_read(adc_handle, static_cast<adc_channel_t>(adc_gpio_ - 32), &raw);
+    if (input_mode_ == MODE_ADS1115) {
+      if (!ads1115_ || !ads1115_->has_state()) return;
+      voltage = ads1115_->state * 1000.0f;
+    } else if (input_mode_ == MODE_NATIVE_ADC) {
+      if (adc_gpio_ < 0) return;
+      #if defined(ARDUINO)
+      int raw = analogRead(adc_gpio_);
       voltage = (raw / 4095.0f) * 3300.0f;
-    } else {
-      voltage = 0.0f;
+      #elif defined(ESP_PLATFORM)
+      // ESP-IDF: use ADC oneshot API for GPIOs 32-39
+      static adc_oneshot_unit_handle_t adc_handle = nullptr;
+      int raw = 0;
+      if (adc_handle && adc_gpio_ >= 32 && adc_gpio_ <= 39) {
+        adc_oneshot_read(adc_handle, static_cast<adc_channel_t>(adc_gpio_ - 32), &raw);
+        voltage = (raw / 4095.0f) * 3300.0f;
+      } else {
+        voltage = 0.0f;
+      }
+      #endif
     }
-#endif
+    
+    voltage_samples[i] = voltage;
+    if (samples_to_take > 1 && i < samples_to_take - 1) {
+      delay(2); // Small delay between samples
+    }
   }
+
+  // Calculate median voltage from samples
+  float voltage = (samples_to_take > 1) ? calculate_median_(voltage_samples, samples_to_take) : voltage_samples[0];
 
   if (voltage < MIN_VALID_VOLTAGE || voltage > MAX_VALID_VOLTAGE) return;
 
@@ -291,11 +320,11 @@ void DFRobotPHMeter::loop() {
   float slope = 0.0f;
   float ph = clamp_ph_(calculate_ph_(voltage, temp_c, slope));
 
-  // Apply smoothing to the calculated pH value
+  // Apply configurable smoothing to the calculated pH value
   if (std::isnan(smoothed_ph_))
     smoothed_ph_ = ph;
   else
-    smoothed_ph_ = PH_SMOOTHING_ALPHA * ph + (1.0f - PH_SMOOTHING_ALPHA) * smoothed_ph_;
+    smoothed_ph_ = smoothing_alpha_ * ph + (1.0f - smoothing_alpha_) * smoothed_ph_;
 
   log_readings_(voltage, temp_c, slope, smoothed_ph_);
 

@@ -37,6 +37,8 @@ class DFRobotPHMeter : public Component {
 
   void set_temperature(float t) { temperature_ = t; }
   void set_update_interval(uint32_t interval) { update_interval_ = interval; }
+  void set_smoothing_alpha(float alpha) { smoothing_alpha_ = alpha; }
+  void set_median_samples(int samples) { median_samples_ = samples; }
 
   void set_use_fahrenheit(bool value) { use_fahrenheit_ = value; }
 
@@ -64,6 +66,7 @@ class DFRobotPHMeter : public Component {
   void update_probe_status_();
   void check_reset_status_();
   bool save_calibration_voltage_(ESPPreferenceObject &pref, float &internal_value, float new_value, const char *label);
+  float calculate_median_(float *values, int count);
   float get_temperature_() const;
   float clamp_ph_(float ph) const;
   float calculate_ph_(float voltage, float temp, float &out_slope);
@@ -101,7 +104,8 @@ class DFRobotPHMeter : public Component {
   bool use_fahrenheit_{false};
 
   float smoothed_ph_{NAN};
-  static constexpr float PH_SMOOTHING_ALPHA = 0.2f;
+  float smoothing_alpha_{0.2f};
+  int median_samples_{5};
 
   int cal_point_1_{4};
   int cal_point_2_{7};

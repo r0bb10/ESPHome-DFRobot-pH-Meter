@@ -76,6 +76,10 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Optional("ph4_solution", default=4.0): cv.float_,
     cv.Optional("ph7_solution", default=7.0): cv.float_,
     cv.Optional("ph10_solution", default=10.0): cv.float_,
+
+    # Optional noise reduction parameters
+    cv.Optional("smoothing_alpha", default=0.2): cv.float_range(min=0.01, max=1.0),
+    cv.Optional("median_samples", default=5): cv.int_range(min=1, max=10),
 })
 
 async def to_code(config):
@@ -120,6 +124,12 @@ async def to_code(config):
     if CONF_PROBE_STATUS_SENSOR in config:
         status_ts = await text_sensor.new_text_sensor(config[CONF_PROBE_STATUS_SENSOR])
         cg.add(var.set_status_sensor(status_ts))
+
+    # Add noise reduction parameters
+    if "smoothing_alpha" in config:
+        cg.add(var.set_smoothing_alpha(config["smoothing_alpha"]))
+    if "median_samples" in config:
+        cg.add(var.set_median_samples(config["median_samples"]))
 
 # --- Actions ---
 @auto.register_action("dfrobot_ph_meter.calibrate_ph4", CalibratePHAction,

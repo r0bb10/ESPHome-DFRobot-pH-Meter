@@ -94,6 +94,9 @@ dfrobot_ph_meter:
   ph4_solution: 3.02   # Default: 4.0
   ph7_solution: 6.86   # Default: 7.0
   ph10_solution: 9.18  # Default: 10.0
+  # Optional: Noise reduction settings
+  smoothing_alpha: 0.2    # Default: 0.2 (range 0.01-1.0, lower = more smoothing)
+  median_samples: 5       # Default: 5 (range 1-10, higher = better noise rejection)
 
 button:
   - platform: template
@@ -146,6 +149,9 @@ dfrobot_ph_meter:
   ph4_solution: 3.02   # Default: 4.0
   ph7_solution: 6.86   # Default: 7.0
   ph10_solution: 9.18  # Default: 10.0
+  # Optional: Noise reduction settings
+  smoothing_alpha: 0.2    # Default: 0.2 (range 0.01-1.0, lower = more smoothing)
+  median_samples: 5       # Default: 5 (range 1-10, higher = better noise rejection)
 
 one_wire:
   - platform: gpio
@@ -196,3 +202,27 @@ button:
 - Use `calibration_mode` switch to enter calibration.
 - Place probe in buffer solution (e.g. pH 7), wait for stable reading, then trigger calibration.
 - Component automatically saves calibration voltage and exits after timeout (5 min).
+
+## 🔇 Noise Reduction Tips
+
+If you experience electrical noise from pumps or other equipment:
+
+### Software Solutions:
+1. **Increase smoothing** - Lower `smoothing_alpha` (e.g., 0.05) for more aggressive averaging
+2. **More samples** - Increase `median_samples` (e.g., 7-10) to better reject EMI spikes
+3. **Slower updates** - Increase `update_interval` for more stable readings
+
+Example for noisy environments:
+```yaml
+dfrobot_ph_meter:
+  smoothing_alpha: 0.05     # Heavy smoothing
+  median_samples: 10        # Maximum noise rejection
+  update_interval: 30s      # Less frequent but more stable updates
+```
+
+### Hardware Solutions:
+- Use shielded cable for pH probe signal wire
+- Add ferrite beads on pump power cables
+- Physically separate pump from pH probe
+- Ensure proper grounding
+- Consider RC low-pass filter on analog input
