@@ -39,6 +39,9 @@ class DFRobotPHMeter : public Component {
   void set_update_interval(uint32_t interval) { update_interval_ = interval; }
   void set_smoothing_alpha(float alpha) { smoothing_alpha_ = alpha; }
   void set_median_samples(int samples) { median_samples_ = samples; }
+  void set_ph4_solution(float value) { ph4_solution_ = value; }
+  void set_ph7_solution(float value) { ph7_solution_ = value; }
+  void set_ph10_solution(float value) { ph10_solution_ = value; }
 
   void set_use_fahrenheit(bool value) { use_fahrenheit_ = value; }
 

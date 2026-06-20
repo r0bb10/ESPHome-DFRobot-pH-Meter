@@ -5,8 +5,6 @@ import esphome.automation as auto
 from esphome.const import (
     CONF_ID,
     CONF_UPDATE_INTERVAL,
-    CONF_TEMPERATURE,
-    CONF_ACCURACY_DECIMALS,
 )
 
 AUTO_LOAD = ["sensor", "switch", "text_sensor"]
@@ -27,22 +25,32 @@ CONF_CALIBRATION_MODE = "calibration_mode"
 CONF_TEMPERATURE_SENSOR = "temperature_sensor"
 CONF_TEMPERATURE_OUTPUT = "temperature_output"
 CONF_PROBE_STATUS_SENSOR = "probe_status_sensor"
-CONF_CALIBRATION_MODE_TYPE = "calibration_mode_type"
-CONF_CALIBRATION_POINTS = "calibration_points"
 CONF_TEMPERATURE_UNIT = "temperature_unit"
 CONF_RAW_VOLTAGE_SENSOR = "raw_voltage_sensor"
 CONF_SLOPE_SENSOR = "slope_sensor"
+CONF_USE_ADS1115 = "use_ads1115"
+CONF_ADC_PIN = "adc_pin"
+CONF_PH4_SOLUTION = "ph4_solution"
+CONF_PH7_SOLUTION = "ph7_solution"
+CONF_PH10_SOLUTION = "ph10_solution"
+CONF_SMOOTHING_ALPHA = "smoothing_alpha"
+CONF_MEDIAN_SAMPLES = "median_samples"
 
-CALIBRATION_LABELS = {"pH4": 4, "pH7": 7, "pH10": 10}
 
-CONFIG_SCHEMA = cv.Schema({
+def validate_input_mode(config):
+    if config[CONF_USE_ADS1115] and CONF_ID_ADS1115 not in config:
+        raise cv.Invalid(f"{CONF_ID_ADS1115} is required when {CONF_USE_ADS1115} is true")
+    if not config[CONF_USE_ADS1115] and CONF_ADC_PIN not in config:
+        raise cv.Invalid(f"{CONF_ADC_PIN} is required when {CONF_USE_ADS1115} is false")
+    return config
+
+
+CONFIG_SCHEMA = cv.All(cv.Schema({
     cv.GenerateID(): cv.declare_id(DFRobotPHMeter),
 
-    # Optional dual-mode configuration
-    cv.Optional("use_ads1115", default=False): cv.boolean,
-    cv.Optional("adc_pin"): cv.int_range(min=0, max=39),
+    cv.Optional(CONF_USE_ADS1115, default=False): cv.boolean,
+    cv.Optional(CONF_ADC_PIN): cv.int_range(min=0, max=39),
 
-    # ADS1115-specific options
     cv.Optional(CONF_ID_ADS1115): cv.use_id(sensor.Sensor),
     cv.Optional(CONF_CHANNEL, default=0): cv.int_range(min=0, max=3),
 
@@ -63,7 +71,7 @@ CONFIG_SCHEMA = cv.Schema({
         state_class="measurement",
     ),
     cv.Optional(CONF_TEMPERATURE_UNIT, default="celsius"): cv.one_of("celsius", "fahrenheit", lower=True),
-    cv.Required(CONF_UPDATE_INTERVAL): cv.update_interval,
+    cv.Optional(CONF_UPDATE_INTERVAL, default="10s"): cv.update_interval,
     cv.Required(CONF_CALIBRATION_MODE): switch.switch_schema(DigitalSwitch),
     cv.Required(CONF_PH_SENSOR): sensor.sensor_schema(
         unit_of_measurement="pH",
@@ -72,27 +80,25 @@ CONFIG_SCHEMA = cv.Schema({
     ),
     cv.Optional(CONF_PROBE_STATUS_SENSOR): text_sensor.text_sensor_schema(),
 
-    # Optional custom calibration buffer values
-    cv.Optional("ph4_solution", default=4.0): cv.float_,
-    cv.Optional("ph7_solution", default=7.0): cv.float_,
-    cv.Optional("ph10_solution", default=10.0): cv.float_,
+    cv.Optional(CONF_PH4_SOLUTION, default=4.0): cv.float_range(min=0.0, max=14.0),
+    cv.Optional(CONF_PH7_SOLUTION, default=7.0): cv.float_range(min=0.0, max=14.0),
+    cv.Optional(CONF_PH10_SOLUTION, default=10.0): cv.float_range(min=0.0, max=14.0),
 
-    # Optional noise reduction parameters
-    cv.Optional("smoothing_alpha", default=0.2): cv.float_range(min=0.01, max=1.0),
-    cv.Optional("median_samples", default=5): cv.int_range(min=1, max=10),
-})
+    cv.Optional(CONF_SMOOTHING_ALPHA, default=0.2): cv.float_range(min=0.01, max=1.0),
+    cv.Optional(CONF_MEDIAN_SAMPLES, default=5): cv.int_range(min=1, max=10),
+}).extend(cv.COMPONENT_SCHEMA), validate_input_mode)
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
-    if config.get("use_ads1115", True):
+    if config[CONF_USE_ADS1115]:
         ads_sensor = await cg.get_variable(config[CONF_ID_ADS1115])
         cg.add(var.set_input_mode_ads1115())
         cg.add(var.set_ads1115_sensor(ads_sensor))
         cg.add(var.set_channel(config.get(CONF_CHANNEL, 0)))
     else:
-        cg.add(var.set_input_mode_native_adc(config["adc_pin"]))
+        cg.add(var.set_input_mode_native_adc(config[CONF_ADC_PIN]))
 
     cg.add(var.set_update_interval(config[CONF_UPDATE_INTERVAL]))
 
@@ -125,11 +131,11 @@ async def to_code(config):
         status_ts = await text_sensor.new_text_sensor(config[CONF_PROBE_STATUS_SENSOR])
         cg.add(var.set_status_sensor(status_ts))
 
-    # Add noise reduction parameters
-    if "smoothing_alpha" in config:
-        cg.add(var.set_smoothing_alpha(config["smoothing_alpha"]))
-    if "median_samples" in config:
-        cg.add(var.set_median_samples(config["median_samples"]))
+    cg.add(var.set_ph4_solution(config[CONF_PH4_SOLUTION]))
+    cg.add(var.set_ph7_solution(config[CONF_PH7_SOLUTION]))
+    cg.add(var.set_ph10_solution(config[CONF_PH10_SOLUTION]))
+    cg.add(var.set_smoothing_alpha(config[CONF_SMOOTHING_ALPHA]))
+    cg.add(var.set_median_samples(config[CONF_MEDIAN_SAMPLES]))
 
 # --- Actions ---
 @auto.register_action("dfrobot_ph_meter.calibrate_ph4", CalibratePHAction,

@@ -2,6 +2,8 @@
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
 
+#include <cmath>
+
 #if defined(ESP_PLATFORM)
 #include "esp_adc/adc_oneshot.h"
 #include "esp_timer.h"
@@ -9,6 +11,7 @@
 static adc_oneshot_unit_handle_t adc_handle = nullptr;
 static adc_oneshot_chan_cfg_t chan_cfg;
 static bool adc_initialized = false;
+static adc_channel_t adc_channel;
 
 #endif
 
@@ -18,6 +21,32 @@ namespace dfrobot_ph_meter {
 static const char *const TAG = "DFRobotPHMeter";
 static constexpr float NERNST_REFERENCE_TEMP = 25.0f;
 static constexpr float KELVIN_OFFSET = 273.15f;
+
+static uint32_t now_ms() {
+#if defined(ARDUINO)
+  return millis();
+#elif defined(ESP_PLATFORM)
+  return static_cast<uint32_t>(esp_timer_get_time() / 1000);
+#else
+  return 0;
+#endif
+}
+
+#if defined(ESP_PLATFORM)
+static bool gpio_to_adc1_channel(int gpio, adc_channel_t *channel) {
+  switch (gpio) {
+    case 36: *channel = ADC_CHANNEL_0; return true;
+    case 37: *channel = ADC_CHANNEL_1; return true;
+    case 38: *channel = ADC_CHANNEL_2; return true;
+    case 39: *channel = ADC_CHANNEL_3; return true;
+    case 32: *channel = ADC_CHANNEL_4; return true;
+    case 33: *channel = ADC_CHANNEL_5; return true;
+    case 34: *channel = ADC_CHANNEL_6; return true;
+    case 35: *channel = ADC_CHANNEL_7; return true;
+    default: return false;
+  }
+}
+#endif
 
 void DFRobotPHMeter::setup() {
   // Initialize preferences and load stored calibration voltages
@@ -49,23 +78,27 @@ void DFRobotPHMeter::setup() {
     analogSetAttenuation(ADC_11db);
     #elif defined(ESP_PLATFORM)
     // ESP-IDF: configure ADC oneshot unit and channel
+    if (!gpio_to_adc1_channel(adc_gpio_, &adc_channel)) {
+      ESP_LOGE(TAG, "GPIO%d is not an ADC1 pin supported by native ADC mode", adc_gpio_);
+      this->mark_failed();
+      return;
+    }
+
     if (!adc_initialized) {
       adc_oneshot_unit_init_cfg_t init_cfg = {
         .unit_id = ADC_UNIT_1,
       };
       adc_oneshot_new_unit(&init_cfg, &adc_handle);
+      adc_initialized = true;
+    }
+
+    if (adc_handle != nullptr) {
       chan_cfg.bitwidth = ADC_BITWIDTH_12;
       chan_cfg.atten = ADC_ATTEN_DB_12;
-      adc_oneshot_config_channel(adc_handle, static_cast<adc_channel_t>(adc_gpio_ - 32), &chan_cfg);
-      adc_initialized = true;
+      adc_oneshot_config_channel(adc_handle, adc_channel, &chan_cfg);
     }
     #endif
   }
-
-  // Load custom calibration solutions from YAML
-  ph4_solution_ = 4.0f;
-  ph7_solution_ = 7.0f;
-  ph10_solution_ = 10.0f;
 }
 
 void DFRobotPHMeter::reset_calibration() {
@@ -79,16 +112,12 @@ void DFRobotPHMeter::reset_calibration() {
 
   if (probe_status_sensor_) probe_status_sensor_->publish_state("RESET_DONE");
   calibration_stage_ = NONE;
-#if defined(ARDUINO)
-  status_reset_timer_ = millis();
-#elif defined(ESP_PLATFORM)
-  status_reset_timer_ = static_cast<uint32_t>(esp_timer_get_time() / 1000); // microseconds to ms
-#endif
+  status_reset_timer_ = now_ms();
 }
 
 bool DFRobotPHMeter::save_calibration_voltage_(ESPPreferenceObject &pref, float &internal_value, float new_value, const char *label) {
   // Save calibration voltage if it has changed significantly
-  if (fabs(internal_value - new_value) > 0.1f) {
+  if (std::fabs(internal_value - new_value) > 0.1f) {
     internal_value = new_value;
     pref.save(&internal_value);
     ESP_LOGI(TAG, "Saved %s calibration: %.2f mV", label, new_value);
@@ -194,9 +223,9 @@ void DFRobotPHMeter::evaluate_calibration_mode_() {
   float ph4_v = 0.0f, ph7_v = 0.0f, ph10_v = 0.0f;
 
   // Check if stored values exist and differ from defaults
-  bool has_ph4 = acid_voltage_pref_.load(&ph4_v) && fabs(ph4_v - acid_voltage_default_) > 1.0f;
-  bool has_ph7 = neutral_voltage_pref_.load(&ph7_v) && fabs(ph7_v - neutral_voltage_default_) > 1.0f;
-  bool has_ph10 = alkaline_voltage_pref_.load(&ph10_v) && fabs(ph10_v - alkaline_voltage_default_) > 1.0f;
+  bool has_ph4 = acid_voltage_pref_.load(&ph4_v) && std::fabs(ph4_v - acid_voltage_default_) > 1.0f;
+  bool has_ph7 = neutral_voltage_pref_.load(&ph7_v) && std::fabs(ph7_v - neutral_voltage_default_) > 1.0f;
+  bool has_ph10 = alkaline_voltage_pref_.load(&ph10_v) && std::fabs(ph10_v - alkaline_voltage_default_) > 1.0f;
 
   int count = int(has_ph4) + int(has_ph7) + int(has_ph10);
 
@@ -220,12 +249,7 @@ void DFRobotPHMeter::evaluate_calibration_mode_() {
 
 void DFRobotPHMeter::check_reset_status_() {
   // Check if the reset status timer has expired and update the status
-  uint32_t now;
-#if defined(ARDUINO)
-  now = millis();
-#elif defined(ESP_PLATFORM)
-  now = static_cast<uint32_t>(esp_timer_get_time() / 1000); // microseconds to ms
-#endif
+  uint32_t now = now_ms();
   if (status_reset_timer_ > 0 && now - status_reset_timer_ > 10000) {
     status_reset_timer_ = 0;
     if (probe_status_sensor_) probe_status_sensor_->publish_state("IDLE");
@@ -233,12 +257,7 @@ void DFRobotPHMeter::check_reset_status_() {
 }
 
 void DFRobotPHMeter::loop() {
-  uint32_t now;
-  #if defined(ARDUINO)
-  now = millis();
-  #elif defined(ESP_PLATFORM)
-  now = static_cast<uint32_t>(esp_timer_get_time() / 1000); // microseconds to ms
-  #endif
+  uint32_t now = now_ms();
   if (now - last_update_ < update_interval_) return;
   last_update_ = now;
 
@@ -247,7 +266,7 @@ void DFRobotPHMeter::loop() {
   // Collect multiple samples for median filtering
   float voltage_samples[10];
   int samples_to_take = median_samples_ > 10 ? 10 : (median_samples_ < 1 ? 1 : median_samples_);
-  
+
   for (int i = 0; i < samples_to_take; i++) {
     float voltage = 0.0f;
 
@@ -261,17 +280,16 @@ void DFRobotPHMeter::loop() {
       voltage = (raw / 4095.0f) * 3300.0f;
       #elif defined(ESP_PLATFORM)
       // ESP-IDF: use ADC oneshot API for GPIOs 32-39
-      static adc_oneshot_unit_handle_t adc_handle = nullptr;
       int raw = 0;
-      if (adc_handle && adc_gpio_ >= 32 && adc_gpio_ <= 39) {
-        adc_oneshot_read(adc_handle, static_cast<adc_channel_t>(adc_gpio_ - 32), &raw);
+      if (adc_handle != nullptr) {
+        adc_oneshot_read(adc_handle, adc_channel, &raw);
         voltage = (raw / 4095.0f) * 3300.0f;
       } else {
-        voltage = 0.0f;
+        return;
       }
       #endif
     }
-    
+
     voltage_samples[i] = voltage;
     if (samples_to_take > 1 && i < samples_to_take - 1) {
       delay(2); // Small delay between samples
@@ -281,7 +299,10 @@ void DFRobotPHMeter::loop() {
   // Calculate median voltage from samples
   float voltage = (samples_to_take > 1) ? calculate_median_(voltage_samples, samples_to_take) : voltage_samples[0];
 
-  if (voltage < MIN_VALID_VOLTAGE || voltage > MAX_VALID_VOLTAGE) return;
+  if (voltage < MIN_VALID_VOLTAGE || voltage > MAX_VALID_VOLTAGE) {
+    ESP_LOGW(TAG, "Ignoring invalid voltage: %.2f mV", voltage);
+    return;
+  }
 
   if (!voltage_initialized_) {
     ESP_LOGI(TAG, "First valid voltage received, starting pH calculation");
