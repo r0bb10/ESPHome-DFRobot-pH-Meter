@@ -1,12 +1,9 @@
 #include "dfrobot_ph_meter.h"
+#include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
 
 #include <cmath>
-
-#if defined(ESP_PLATFORM)
-#include "esp_timer.h"
-#endif
 
 namespace esphome {
 namespace dfrobot_ph_meter {
@@ -14,16 +11,6 @@ namespace dfrobot_ph_meter {
 static const char *const TAG = "DFRobotPHMeter";
 static constexpr float NERNST_REFERENCE_TEMP = 25.0f;
 static constexpr float KELVIN_OFFSET = 273.15f;
-
-static uint32_t now_ms() {
-#if defined(ARDUINO)
-  return millis();
-#elif defined(ESP_PLATFORM)
-  return static_cast<uint32_t>(esp_timer_get_time() / 1000);
-#else
-  return 0;
-#endif
-}
 
 void DFRobotPHMeter::setup() {
   // Initialize preferences and load stored calibration voltages
@@ -60,7 +47,7 @@ void DFRobotPHMeter::reset_calibration() {
 
   if (probe_status_sensor_) probe_status_sensor_->publish_state("RESET_DONE");
   calibration_stage_ = NONE;
-  status_reset_timer_ = now_ms();
+  status_reset_timer_ = millis();
 }
 
 bool DFRobotPHMeter::save_calibration_voltage_(ESPPreferenceObject &pref, float &internal_value, float new_value, const char *label) {
@@ -182,7 +169,7 @@ void DFRobotPHMeter::evaluate_calibration_mode_() {
 
 void DFRobotPHMeter::check_reset_status_() {
   // Check if the reset status timer has expired and update the status
-  uint32_t now = now_ms();
+  uint32_t now = millis();
   if (status_reset_timer_ > 0 && now - status_reset_timer_ > 10000) {
     status_reset_timer_ = 0;
     if (probe_status_sensor_) probe_status_sensor_->publish_state("IDLE");
@@ -190,7 +177,7 @@ void DFRobotPHMeter::check_reset_status_() {
 }
 
 void DFRobotPHMeter::loop() {
-  uint32_t now = now_ms();
+  uint32_t now = millis();
   if (now - last_update_ < update_interval_) return;
   last_update_ = now;
 
