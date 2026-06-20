@@ -5,14 +5,7 @@
 #include <cmath>
 
 #if defined(ESP_PLATFORM)
-#include "esp_adc/adc_oneshot.h"
 #include "esp_timer.h"
-
-static adc_oneshot_unit_handle_t adc_handle = nullptr;
-static adc_oneshot_chan_cfg_t chan_cfg;
-static bool adc_initialized = false;
-static adc_channel_t adc_channel;
-
 #endif
 
 namespace esphome {
@@ -31,22 +24,6 @@ static uint32_t now_ms() {
   return 0;
 #endif
 }
-
-#if defined(ESP_PLATFORM)
-static bool gpio_to_adc1_channel(int gpio, adc_channel_t *channel) {
-  switch (gpio) {
-    case 36: *channel = ADC_CHANNEL_0; return true;
-    case 37: *channel = ADC_CHANNEL_1; return true;
-    case 38: *channel = ADC_CHANNEL_2; return true;
-    case 39: *channel = ADC_CHANNEL_3; return true;
-    case 32: *channel = ADC_CHANNEL_4; return true;
-    case 33: *channel = ADC_CHANNEL_5; return true;
-    case 34: *channel = ADC_CHANNEL_6; return true;
-    case 35: *channel = ADC_CHANNEL_7; return true;
-    default: return false;
-  }
-}
-#endif
 
 void DFRobotPHMeter::setup() {
   // Initialize preferences and load stored calibration voltages
@@ -70,35 +47,6 @@ void DFRobotPHMeter::setup() {
   else
     alkaline_voltage_ = alkaline_voltage_default_;
 
-  // ADC configuration for native ADC mode
-  if (input_mode_ == MODE_NATIVE_ADC && adc_gpio_ >= 0) {
-    #if defined(ARDUINO)
-    // Arduino framework: set ADC resolution and attenuation
-    analogReadResolution(12);
-    analogSetAttenuation(ADC_11db);
-    #elif defined(ESP_PLATFORM)
-    // ESP-IDF: configure ADC oneshot unit and channel
-    if (!gpio_to_adc1_channel(adc_gpio_, &adc_channel)) {
-      ESP_LOGE(TAG, "GPIO%d is not an ADC1 pin supported by native ADC mode", adc_gpio_);
-      this->mark_failed();
-      return;
-    }
-
-    if (!adc_initialized) {
-      adc_oneshot_unit_init_cfg_t init_cfg = {
-        .unit_id = ADC_UNIT_1,
-      };
-      adc_oneshot_new_unit(&init_cfg, &adc_handle);
-      adc_initialized = true;
-    }
-
-    if (adc_handle != nullptr) {
-      chan_cfg.bitwidth = ADC_BITWIDTH_12;
-      chan_cfg.atten = ADC_ATTEN_DB_12;
-      adc_oneshot_config_channel(adc_handle, adc_channel, &chan_cfg);
-    }
-    #endif
-  }
 }
 
 void DFRobotPHMeter::reset_calibration() {
@@ -203,21 +151,6 @@ void DFRobotPHMeter::log_readings_(float voltage, float temp, float slope, float
   ESP_LOGD(TAG, "Voltage: %.2f mV | Temp: %.2f °C | Slope: %.4f | pH: %.2f", voltage, temp, slope, ph);
 }
 
-float DFRobotPHMeter::calculate_median_(float *values, int count) {
-  // Simple bubble sort for median calculation
-  for (int i = 0; i < count - 1; i++) {
-    for (int j = 0; j < count - i - 1; j++) {
-      if (values[j] > values[j + 1]) {
-        float temp = values[j];
-        values[j] = values[j + 1];
-        values[j + 1] = temp;
-      }
-    }
-  }
-  // Return middle value
-  return values[count / 2];
-}
-
 void DFRobotPHMeter::evaluate_calibration_mode_() {
   // Determine the calibration mode based on stored voltages
   float ph4_v = 0.0f, ph7_v = 0.0f, ph10_v = 0.0f;
@@ -263,41 +196,8 @@ void DFRobotPHMeter::loop() {
 
   update_probe_status_();
 
-  // Collect multiple samples for median filtering
-  float voltage_samples[10];
-  int samples_to_take = median_samples_ > 10 ? 10 : (median_samples_ < 1 ? 1 : median_samples_);
-
-  for (int i = 0; i < samples_to_take; i++) {
-    float voltage = 0.0f;
-
-    if (input_mode_ == MODE_ADS1115) {
-      if (!ads1115_ || !ads1115_->has_state()) return;
-      voltage = ads1115_->state * 1000.0f;
-    } else if (input_mode_ == MODE_NATIVE_ADC) {
-      if (adc_gpio_ < 0) return;
-      #if defined(ARDUINO)
-      int raw = analogRead(adc_gpio_);
-      voltage = (raw / 4095.0f) * 3300.0f;
-      #elif defined(ESP_PLATFORM)
-      // ESP-IDF: use ADC oneshot API for GPIOs 32-39
-      int raw = 0;
-      if (adc_handle != nullptr) {
-        adc_oneshot_read(adc_handle, adc_channel, &raw);
-        voltage = (raw / 4095.0f) * 3300.0f;
-      } else {
-        return;
-      }
-      #endif
-    }
-
-    voltage_samples[i] = voltage;
-    if (samples_to_take > 1 && i < samples_to_take - 1) {
-      delay(2); // Small delay between samples
-    }
-  }
-
-  // Calculate median voltage from samples
-  float voltage = (samples_to_take > 1) ? calculate_median_(voltage_samples, samples_to_take) : voltage_samples[0];
+  if (!voltage_sensor_ || !voltage_sensor_->has_state()) return;
+  float voltage = voltage_sensor_->state * 1000.0f;
 
   if (voltage < MIN_VALID_VOLTAGE || voltage > MAX_VALID_VOLTAGE) {
     ESP_LOGW(TAG, "Ignoring invalid voltage: %.2f mV", voltage);

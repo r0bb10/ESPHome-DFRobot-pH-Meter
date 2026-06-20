@@ -1,6 +1,6 @@
 # DFRobot pH Probe for ESPHome
 
-An ESPHome custom component to interface with **DFRobot Analog pH sensors** using either:
+An ESPHome custom component to interface with **DFRobot Analog pH sensors** using any ESPHome voltage sensor, including:
 - ✅ High-precision external **ADS1115 ADC**
 - ✅ Native **ESP32 ADC GPIO** for simple setups
 
@@ -10,7 +10,7 @@ This component enables accurate pH monitoring and calibration for aquarium, hydr
 
 ## 🧪 Features
 
-- ⚙️ **Supports dual input modes**:
+- ⚙️ **Uses ESPHome voltage sensors**:
   - External ADS1115 (16-bit precision)
   - ESP32 internal ADC pin (12-bit)
 - 🌡️ **Temperature-compensated pH readings**
@@ -77,8 +77,7 @@ external_components:
 # pH Meter Component Configuration
 dfrobot_ph_meter:
   id: ph_sensor
-  use_ads1115: false 
-  adc_pin: 36
+  voltage_sensor: ph_voltage_sensor
   update_interval: 10s  # Optional: Time between readings (default: 10s)
   ph_sensor:
     name: "pH Sensor"
@@ -96,7 +95,17 @@ dfrobot_ph_meter:
   ph10_solution: 9.18  # Default: 10.0
   # Optional: Noise reduction settings
   smoothing_alpha: 0.2    # Default: 0.2 (range 0.01-1.0, lower = more smoothing)
-  median_samples: 5       # Default: 5 (range 1-10, higher = better noise rejection)
+
+sensor:
+  - platform: adc
+    id: ph_voltage_sensor
+    pin: GPIO36
+    attenuation: 12db
+    update_interval: 1s
+    filters:
+      - median:
+          window_size: 5
+          send_every: 1
 
 button:
   - platform: template
@@ -130,9 +139,7 @@ button:
 # pH Meter Component Configuration
 dfrobot_ph_meter:
   id: ph_sensor
-  use_ads1115: true
-  channel: 0
-  id_ads1115: ph_voltage_sensor
+  voltage_sensor: ph_voltage_sensor
   update_interval: 10s 
   temperature_sensor: water_temp  # If specified is used for compensation
   ph_sensor:
@@ -151,7 +158,6 @@ dfrobot_ph_meter:
   ph10_solution: 9.18  # Default: 10.0
   # Optional: Noise reduction settings
   smoothing_alpha: 0.2    # Default: 0.2 (range 0.01-1.0, lower = more smoothing)
-  median_samples: 5       # Default: 5 (range 1-10, higher = better noise rejection)
 
 one_wire:
   - platform: gpio
@@ -165,6 +171,11 @@ sensor:
     id: ph_voltage_sensor
     multiplexer: A0_GND
     gain: 4.096
+    update_interval: 1s
+    filters:
+      - median:
+          window_size: 5
+          send_every: 1
   - platform: dallas_temp
     name: "Water Temperature"
     id: water_temp
@@ -209,15 +220,24 @@ If you experience electrical noise from pumps or other equipment:
 
 ### Software Solutions:
 1. **Increase smoothing** - Lower `smoothing_alpha` (e.g., 0.05) for more aggressive averaging
-2. **More samples** - Increase `median_samples` (e.g., 7-10) to better reject EMI spikes
+2. **More samples** - Add or increase a `median` filter on the source voltage sensor to better reject EMI spikes
 3. **Slower updates** - Increase `update_interval` for more stable readings
 
 Example for noisy environments:
 ```yaml
 dfrobot_ph_meter:
   smoothing_alpha: 0.05     # Heavy smoothing
-  median_samples: 10        # Maximum noise rejection
   update_interval: 30s      # Less frequent but more stable updates
+
+sensor:
+  - platform: adc
+    id: ph_voltage_sensor
+    pin: GPIO36
+    attenuation: 12db
+    filters:
+      - median:
+          window_size: 10
+          send_every: 1
 ```
 
 ### Hardware Solutions:

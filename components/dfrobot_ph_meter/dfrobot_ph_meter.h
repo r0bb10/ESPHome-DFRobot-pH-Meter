@@ -23,8 +23,7 @@ class DFRobotPHMeter : public Component {
   void setup() override;
   void loop() override;
 
-  void set_ads1115_sensor(sensor::Sensor *adc) { ads1115_ = adc; }
-  void set_channel(int ch) { channel_ = ch; }
+  void set_voltage_sensor(sensor::Sensor *sensor) { voltage_sensor_ = sensor; }
 
   void set_acid_voltage(float v) {
     acid_voltage_ = v;
@@ -38,7 +37,6 @@ class DFRobotPHMeter : public Component {
   void set_temperature(float t) { temperature_ = t; }
   void set_update_interval(uint32_t interval) { update_interval_ = interval; }
   void set_smoothing_alpha(float alpha) { smoothing_alpha_ = alpha; }
-  void set_median_samples(int samples) { median_samples_ = samples; }
   void set_ph4_solution(float value) { ph4_solution_ = value; }
   void set_ph7_solution(float value) { ph7_solution_ = value; }
   void set_ph10_solution(float value) { ph10_solution_ = value; }
@@ -58,9 +56,6 @@ class DFRobotPHMeter : public Component {
   void set_raw_voltage_sensor(sensor::Sensor *s) { raw_voltage_sensor_ = s; }
   void set_slope_sensor(sensor::Sensor *s) { current_slope_sensor_ = s; }
 
-  void set_input_mode_ads1115() { input_mode_ = MODE_ADS1115; }
-  void set_input_mode_native_adc(int gpio) { input_mode_ = MODE_NATIVE_ADC; adc_gpio_ = gpio; }
-
   void reset_calibration();
   void set_calibration_stage(int stage);
   void evaluate_calibration_mode_();
@@ -69,15 +64,12 @@ class DFRobotPHMeter : public Component {
   void update_probe_status_();
   void check_reset_status_();
   bool save_calibration_voltage_(ESPPreferenceObject &pref, float &internal_value, float new_value, const char *label);
-  float calculate_median_(float *values, int count);
   float get_temperature_() const;
   float clamp_ph_(float ph) const;
   float calculate_ph_(float voltage, float temp, float &out_slope);
   void log_readings_(float voltage, float temp, float slope, float ph);
 
-  enum InputMode { MODE_ADS1115, MODE_NATIVE_ADC };
-
-  sensor::Sensor *ads1115_{nullptr};
+  sensor::Sensor *voltage_sensor_{nullptr};
   sensor::Sensor *temperature_sensor_{nullptr};
   sensor::Sensor *ph_sensor_{nullptr};
   sensor::Sensor *temperature_output_sensor_{nullptr};
@@ -86,7 +78,6 @@ class DFRobotPHMeter : public Component {
   text_sensor::TextSensor *probe_status_sensor_{nullptr};
   DigitalSwitch *calibration_mode_switch_{nullptr};
 
-  int channel_;
   float acid_voltage_ = 2032.0f;
   float neutral_voltage_ = 1650.0f;
   float alkaline_voltage_ = 1268.0f;
@@ -108,7 +99,6 @@ class DFRobotPHMeter : public Component {
 
   float smoothed_ph_{NAN};
   float smoothing_alpha_{0.2f};
-  int median_samples_{5};
 
   int cal_point_1_{4};
   int cal_point_2_{7};
@@ -124,9 +114,6 @@ class DFRobotPHMeter : public Component {
   static constexpr float MAX_VALID_VOLTAGE = 3000.0f;
   static constexpr float DEFAULT_TEMPERATURE = 25.0f;
   static constexpr float MIN_CALIBRATION_VOLTAGE = 500.0f;
-
-  InputMode input_mode_{MODE_ADS1115};
-  int adc_gpio_{-1};
 
   float ph4_solution_ = 4.0f;
   float ph7_solution_ = 7.0f;

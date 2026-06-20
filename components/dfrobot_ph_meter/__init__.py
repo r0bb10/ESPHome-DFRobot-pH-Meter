@@ -15,11 +15,7 @@ DFRobotPHMeter = ph_meter_ns.class_("DFRobotPHMeter", cg.Component)
 DigitalSwitch = ph_meter_ns.class_("DigitalSwitch", switch.Switch)
 CalibratePHAction = ph_meter_ns.class_("CalibratePHAction", auto.Action)
 
-CONF_ID_ADS1115 = "id_ads1115"
-CONF_CHANNEL = "channel"
-CONF_ACID_VOLTAGE = "acid_voltage"
-CONF_NEUTRAL_VOLTAGE = "neutral_voltage"
-CONF_ALKALINE_VOLTAGE = "alkaline_voltage"
+CONF_VOLTAGE_SENSOR = "voltage_sensor"
 CONF_PH_SENSOR = "ph_sensor"
 CONF_CALIBRATION_MODE = "calibration_mode"
 CONF_TEMPERATURE_SENSOR = "temperature_sensor"
@@ -28,32 +24,16 @@ CONF_PROBE_STATUS_SENSOR = "probe_status_sensor"
 CONF_TEMPERATURE_UNIT = "temperature_unit"
 CONF_RAW_VOLTAGE_SENSOR = "raw_voltage_sensor"
 CONF_SLOPE_SENSOR = "slope_sensor"
-CONF_USE_ADS1115 = "use_ads1115"
-CONF_ADC_PIN = "adc_pin"
 CONF_PH4_SOLUTION = "ph4_solution"
 CONF_PH7_SOLUTION = "ph7_solution"
 CONF_PH10_SOLUTION = "ph10_solution"
 CONF_SMOOTHING_ALPHA = "smoothing_alpha"
-CONF_MEDIAN_SAMPLES = "median_samples"
 
 
-def validate_input_mode(config):
-    if config[CONF_USE_ADS1115] and CONF_ID_ADS1115 not in config:
-        raise cv.Invalid(f"{CONF_ID_ADS1115} is required when {CONF_USE_ADS1115} is true")
-    if not config[CONF_USE_ADS1115] and CONF_ADC_PIN not in config:
-        raise cv.Invalid(f"{CONF_ADC_PIN} is required when {CONF_USE_ADS1115} is false")
-    return config
-
-
-CONFIG_SCHEMA = cv.All(cv.Schema({
+CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(DFRobotPHMeter),
 
-    cv.Optional(CONF_USE_ADS1115, default=False): cv.boolean,
-    cv.Optional(CONF_ADC_PIN): cv.int_range(min=0, max=39),
-
-    cv.Optional(CONF_ID_ADS1115): cv.use_id(sensor.Sensor),
-    cv.Optional(CONF_CHANNEL, default=0): cv.int_range(min=0, max=3),
-
+    cv.Required(CONF_VOLTAGE_SENSOR): cv.use_id(sensor.Sensor),
     cv.Optional(CONF_TEMPERATURE_SENSOR): cv.use_id(sensor.Sensor),
     cv.Optional(CONF_TEMPERATURE_OUTPUT): sensor.sensor_schema(
         unit_of_measurement="°C",
@@ -85,20 +65,14 @@ CONFIG_SCHEMA = cv.All(cv.Schema({
     cv.Optional(CONF_PH10_SOLUTION, default=10.0): cv.float_range(min=0.0, max=14.0),
 
     cv.Optional(CONF_SMOOTHING_ALPHA, default=0.2): cv.float_range(min=0.01, max=1.0),
-    cv.Optional(CONF_MEDIAN_SAMPLES, default=5): cv.int_range(min=1, max=10),
-}).extend(cv.COMPONENT_SCHEMA), validate_input_mode)
+}).extend(cv.COMPONENT_SCHEMA)
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
-    if config[CONF_USE_ADS1115]:
-        ads_sensor = await cg.get_variable(config[CONF_ID_ADS1115])
-        cg.add(var.set_input_mode_ads1115())
-        cg.add(var.set_ads1115_sensor(ads_sensor))
-        cg.add(var.set_channel(config.get(CONF_CHANNEL, 0)))
-    else:
-        cg.add(var.set_input_mode_native_adc(config[CONF_ADC_PIN]))
+    voltage_sensor = await cg.get_variable(config[CONF_VOLTAGE_SENSOR])
+    cg.add(var.set_voltage_sensor(voltage_sensor))
 
     cg.add(var.set_update_interval(config[CONF_UPDATE_INTERVAL]))
 
@@ -135,7 +109,6 @@ async def to_code(config):
     cg.add(var.set_ph7_solution(config[CONF_PH7_SOLUTION]))
     cg.add(var.set_ph10_solution(config[CONF_PH10_SOLUTION]))
     cg.add(var.set_smoothing_alpha(config[CONF_SMOOTHING_ALPHA]))
-    cg.add(var.set_median_samples(config[CONF_MEDIAN_SAMPLES]))
 
 # --- Actions ---
 @auto.register_action("dfrobot_ph_meter.calibrate_ph4", CalibratePHAction,
