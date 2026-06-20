@@ -51,7 +51,7 @@ CONFIG_SCHEMA = cv.Schema({
         state_class="measurement",
     ),
     cv.Optional(CONF_TEMPERATURE_UNIT, default="celsius"): cv.one_of("celsius", "fahrenheit", lower=True),
-    cv.Optional(CONF_UPDATE_INTERVAL, default="10s"): cv.update_interval,
+    cv.Optional(CONF_UPDATE_INTERVAL, default="10s"): cv.positive_time_period_milliseconds,
     cv.Required(CONF_CALIBRATION_MODE): switch.switch_schema(DigitalSwitch),
     cv.Required(CONF_PH_SENSOR): sensor.sensor_schema(
         unit_of_measurement="pH",
@@ -112,7 +112,7 @@ async def to_code(config):
 
 # --- Actions ---
 @auto.register_action("dfrobot_ph_meter.calibrate_ph4", CalibratePHAction,
-    cv.Schema({cv.GenerateID(): cv.use_id(DFRobotPHMeter)}))
+    cv.Schema({cv.GenerateID(): cv.use_id(DFRobotPHMeter)}), synchronous=True)
 async def calibrate_ph4_to_code(config, action_id, template_arg, args):
     var = await cg.get_variable(config[CONF_ID])
     act = cg.new_Pvariable(action_id, var)
@@ -120,7 +120,7 @@ async def calibrate_ph4_to_code(config, action_id, template_arg, args):
     return act
 
 @auto.register_action("dfrobot_ph_meter.calibrate_ph7", CalibratePHAction,
-    cv.Schema({cv.GenerateID(): cv.use_id(DFRobotPHMeter)}))
+    cv.Schema({cv.GenerateID(): cv.use_id(DFRobotPHMeter)}), synchronous=True)
 async def calibrate_ph7_to_code(config, action_id, template_arg, args):
     var = await cg.get_variable(config[CONF_ID])
     act = cg.new_Pvariable(action_id, var)
@@ -128,7 +128,7 @@ async def calibrate_ph7_to_code(config, action_id, template_arg, args):
     return act
 
 @auto.register_action("dfrobot_ph_meter.calibrate_ph10", CalibratePHAction,
-    cv.Schema({cv.GenerateID(): cv.use_id(DFRobotPHMeter)}))
+    cv.Schema({cv.GenerateID(): cv.use_id(DFRobotPHMeter)}), synchronous=True)
 async def calibrate_ph10_to_code(config, action_id, template_arg, args):
     var = await cg.get_variable(config[CONF_ID])
     act = cg.new_Pvariable(action_id, var)
@@ -136,7 +136,7 @@ async def calibrate_ph10_to_code(config, action_id, template_arg, args):
     return act
 
 @auto.register_action("dfrobot_ph_meter.reset_calibration", CalibratePHAction,
-    cv.Schema({cv.GenerateID(): cv.use_id(DFRobotPHMeter)}))
+    cv.Schema({cv.GenerateID(): cv.use_id(DFRobotPHMeter)}), synchronous=True)
 async def reset_calibration_to_code(config, action_id, template_arg, args):
     var = await cg.get_variable(config[CONF_ID])
     act = cg.new_Pvariable(action_id, var)
